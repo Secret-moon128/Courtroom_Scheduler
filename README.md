@@ -237,7 +237,7 @@ docker run -p 7860:7860 \
 ```bash
 huggingface-cli login
 huggingface-cli repo create courtroom-scheduler --type space --space_sdk docker
-git remote add hf https://huggingface.co/spaces/<your-username>/courtroom-scheduler
+git remote add hf https://huggingface.co/spaces/Secret128moon/courtroom-scheduler
 git push hf main
 ```
 
