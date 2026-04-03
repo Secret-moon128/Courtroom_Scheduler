@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Courtroom Case Scheduling Negotiator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+
+  .header { background: #1a1d2e; border-bottom: 1px solid #2d3748; padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
+  .header h1 { font-size: 1.25rem; font-weight: 600; color: #f7fafc; }
+  .badge { background: #22543d; color: #9ae6b4; font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #48bb78; box-shadow: 0 0 6px #48bb78; margin-left: auto; }
+  .status-text { font-size: 12px; color: #68d391; }
+
+  .main { display: grid; grid-template-columns: 280px 1fr; gap: 0; height: calc(100vh - 57px); }
+
+  .sidebar { background: #1a1d2e; border-right: 1px solid #2d3748; padding: 1.5rem; overflow-y: auto; }
+  .sidebar h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #718096; margin-bottom: 1rem; }
+
+  .task-btn { width: 100%; text-align: left; background: #2d3748; border: 1px solid #4a5568; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.5rem; cursor: pointer; color: #e2e8f0; transition: all 0.15s; }
+  .task-btn:hover { background: #3d4a5c; border-color: #63b3ed; }
+  .task-btn.active { background: #1e3a5f; border-color: #4299e1; }
+  .task-btn .task-name { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+  .task-btn .task-diff { font-size: 11px; }
+  .diff-easy { color: #68d391; }
+  .diff-medium { color: #f6ad55; }
+  .diff-hard { color: #fc8181; }
+
+  .divider { border: none; border-top: 1px solid #2d3748; margin: 1.25rem 0; }
+
+  .action-section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #718096; margin-bottom: 0.75rem; }
+  .field { margin-bottom: 0.75rem; }
+  .field label { display: block; font-size: 11px; color: #a0aec0; margin-bottom: 4px; }
+  .field select, .field input { width: 100%; background: #2d3748; border: 1px solid #4a5568; border-radius: 6px; padding: 6px 10px; color: #e2e8f0; font-size: 13px; }
+  .field select:focus, .field input:focus { outline: none; border-color: #4299e1; }
+
+  .btn { width: 100%; padding: 8px; border-radius: 6px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; margin-bottom: 0.5rem; }
+  .btn-primary { background: #3182ce; color: white; }
+  .btn-primary:hover { background: #2b6cb0; }
+  .btn-success { background: #276749; color: #9ae6b4; }
+  .btn-success:hover { background: #22543d; }
+  .btn-danger { background: #742a2a; color: #feb2b2; }
+  .btn-danger:hover { background: #63171b; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .content { display: flex; flex-direction: column; overflow: hidden; }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #2d3748; border-bottom: 1px solid #2d3748; }
+  .metric { background: #1a1d2e; padding: 1rem 1.25rem; }
+  .metric-label { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .metric-value { font-size: 22px; font-weight: 600; color: #f7fafc; }
+  .metric-value.good { color: #68d391; }
+  .metric-value.warn { color: #f6ad55; }
+  .metric-value.bad  { color: #fc8181; }
+
+  .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #2d3748; flex: 1; overflow: hidden; }
+  .panel { background: #0f1117; overflow-y: auto; }
+  .panel-header { background: #1a1d2e; padding: 0.75rem 1rem; font-size: 12px; font-weight: 500; color: #a0aec0; border-bottom: 1px solid #2d3748; position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; }
+  .panel-body { padding: 0.75rem; }
+
+  .case-card { background: #1a1d2e; border: 1px solid #2d3748; border-radius: 6px; padding: 0.65rem 0.85rem; margin-bottom: 0.5rem; font-size: 12px; }
+  .case-card.scheduled { border-color: #276749; background: #1c3829; }
+  .case-card.overdue { border-color: #742a2a; background: #1c1010; }
+  .case-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .case-id { font-weight: 600; color: #90cdf4; font-size: 11px; }
+  .case-type { font-size: 10px; padding: 1px 6px; border-radius: 10px; background: #2d3748; color: #a0aec0; }
+  .prio { font-size: 10px; padding: 1px 5px; border-radius: 10px; }
+  .prio-1 { background: #742a2a; color: #fc8181; }
+  .prio-2 { background: #7b341e; color: #fbd38d; }
+  .prio-3 { background: #2d3748; color: #a0aec0; }
+  .prio-4, .prio-5 { background: #1a202c; color: #718096; }
+  .case-detail { color: #718096; font-size: 11px; }
+  .case-assigned { color: #68d391; font-size: 11px; margin-top: 3px; }
+  .deadline-badge { color: #fc8181; font-size: 10px; }
+
+  .hearing-card { background: #1a1d2e; border: 1px solid #276749; border-radius: 6px; padding: 0.6rem 0.85rem; margin-bottom: 0.4rem; font-size: 12px; }
+  .hearing-top { display: flex; justify-content: space-between; align-items: center; }
+  .hearing-case { font-weight: 600; color: #90cdf4; font-size: 11px; }
+  .hearing-slot { background: #2d3748; padding: 1px 6px; border-radius: 4px; font-size: 10px; color: #68d391; }
+  .hearing-detail { color: #718096; font-size: 11px; margin-top: 2px; }
+
+  .log-panel { background: #0d1117; border-top: 1px solid #2d3748; height: 160px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 11px; padding: 0.5rem 1rem; }
+  .log-line { padding: 2px 0; border-bottom: 1px solid #161b22; }
+  .log-line.info { color: #58a6ff; }
+  .log-line.success { color: #3fb950; }
+  .log-line.error { color: #f85149; }
+  .log-line.warn { color: #d29922; }
+  .log-time { color: #484f58; margin-right: 8px; }
+
+  .empty { color: #4a5568; font-size: 12px; text-align: center; padding: 2rem; }
+  .score-bar { height: 4px; background: #2d3748; border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .score-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4299e1" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </div>
+  <h1>Courtroom Case Scheduling Negotiator</h1>
+  <span class="badge">OpenEnv</span>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+    <div class="status-dot" id="status-dot"></div>
+    <span class="status-text" id="status-text">connecting...</span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <h2>Select Task</h2>
+    <button class="task-btn active" onclick="selectTask('easy')" id="btn-easy">
+      <div class="task-name">Clear 5-Case Docket</div>
+      <div class="task-diff diff-easy">Easy — 5 cases, no deadlines</div>
+    </button>
+    <button class="task-btn" onclick="selectTask('medium')" id="btn-medium">
+      <div class="task-name">Backlog Prioritisation</div>
+      <div class="task-diff diff-medium">Medium — 15 cases, conflicts</div>
+    </button>
+    <button class="task-btn" onclick="selectTask('hard')" id="btn-hard">
+      <div class="task-name">Surge + Statutory Deadlines</div>
+      <div class="task-diff diff-hard">Hard — 30 cases, deadlines</div>
+    </button>
+
+    <hr class="divider">
+
+    <div class="action-section">
+      <h2>Manual Action</h2>
+      <div class="field">
+        <label>Action Type</label>
+        <select id="act-type" onchange="onActionTypeChange()">
+          <option value="schedule">schedule</option>
+          <option value="noop">noop</option>
+          <option value="defer">defer</option>
+          <option value="prioritise">prioritise</option>
+        </select>
+      </div>
+      <div id="schedule-fields">
+        <div class="field">
+          <label>Case ID</label>
+          <select id="act-case"></select>
+        </div>
+        <div class="field">
+          <label>Slot</label>
+          <input type="number" id="act-slot" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Judge</label>
+          <select id="act-judge"></select>
+        </div>
+        <div class="field">
+          <label>Room</label>
+          <select id="act-room"></select>
+        </div>
+      </div>
+      <button class="btn btn-success" onclick="sendAction()" id="step-btn">Step →</button>
+      <button class="btn btn-primary" onclick="resetEnv()" id="reset-btn">Reset Environment</button>
+    </div>
+
+    <hr class="divider">
+    <h2>Grader Score</h2>
+    <div id="score-display" style="font-size:28px;font-weight:700;color:#68d391;margin-bottom:4px">—</div>
+    <div class="score-bar"><div class="score-fill" id="score-fill" style="width:0%;background:#68d391"></div></div>
+    <div style="font-size:11px;color:#718096;margin-top:4px" id="score-label">Reset to begin</div>
+  </div>
+
+  <div class="content">
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">Step</div>
+        <div class="metric-value" id="m-step">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Unscheduled</div>
+        <div class="metric-value warn" id="m-unscheduled">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Overdue</div>
+        <div class="metric-value bad" id="m-overdue">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Cumulative Reward</div>
+        <div class="metric-value" id="m-reward">—</div>
+      </div>
+    </div>
+
+    <div class="panels">
+      <div class="panel">
+        <div class="panel-header">
+          <span>Case Docket</span>
+          <span id="case-count" style="color:#4a5568">—</span>
+        </div>
+        <div class="panel-body" id="case-list"><div class="empty">Reset the environment to load cases</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span>Scheduled Hearings</span>
+          <span id="hearing-count" style="color:#4a5568">0 hearings</span>
+        </div>
+        <div class="panel-body" id="hearing-list"><div class="empty">No hearings scheduled yet</div></div>
+      </div>
+    </div>
+
+    <div style="background:#161b22;border-top:1px solid #2d3748;padding:4px 8px;font-size:10px;color:#484f58;display:flex;align-items:center;gap:6px">
+      <span>Activity Log</span>
+    </div>
+    <div class="log-panel" id="log-panel"></div>
+  </div>
+</div>
+
+<script>
+const BASE = '';
+let currentTask = 'easy';
+let currentObs  = null;
+let episodeDone = false;
+
+function log(msg, type='info') {
+  const panel = document.getElementById('log-panel');
+  const t = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = `log-line ${type}`;
+  div.innerHTML = `<span class="log-time">${t}</span>${msg}`;
+  panel.appendChild(div);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+async function checkHealth() {
+  try {
+    const r = await fetch(`${BASE}/health`);
+    if (r.ok) {
+      document.getElementById('status-dot').style.background = '#48bb78';
+      document.getElementById('status-dot').style.boxShadow = '0 0 6px #48bb78';
+      document.getElementById('status-text').textContent = 'server online';
+      log('Server connected at ' + window.location.host, 'success');
+    }
+  } catch {
+    document.getElementById('status-dot').style.background = '#fc8181';
+    document.getElementById('status-dot').style.boxShadow = '0 0 6px #fc8181';
+    document.getElementById('status-text').textContent = 'offline';
+    log('Cannot reach server', 'error');
+  }
+}
+
+function selectTask(taskId) {
+  currentTask = taskId;
+  ['easy','medium','hard'].forEach(t => {
+    document.getElementById(`btn-${t}`).classList.toggle('active', t === taskId);
+  });
+  log(`Selected task: ${taskId}`, 'info');
+}
+
+async function resetEnv() {
+  log(`Resetting to task: ${currentTask}...`, 'info');
+  document.getElementById('reset-btn').disabled = true;
+  try {
+    const r = await fetch(`${BASE}/reset/${currentTask}`, { method: 'POST' });
+    currentObs  = await r.json();
+    episodeDone = false;
+    renderObs(currentObs);
+    updateScore(null);
+    log(`Environment reset — ${currentObs.cases.length} cases loaded`, 'success');
+    populateSelects(currentObs);
+  } catch(e) {
+    log('Reset failed: ' + e.message, 'error');
+  }
+  document.getElementById('reset-btn').disabled = false;
+}
+
+async function sendAction() {
+  if (!currentObs) { log('Reset the environment first', 'warn'); return; }
+  if (episodeDone) { log('Episode is done — reset to continue', 'warn'); return; }
+
+  const actionType = document.getElementById('act-type').value;
+  const action = { action_type: actionType };
+
+  if (actionType === 'schedule' || actionType === 'reschedule') {
+    action.case_id  = document.getElementById('act-case').value;
+    action.slot     = parseInt(document.getElementById('act-slot').value);
+    action.judge_id = document.getElementById('act-judge').value;
+    action.room_id  = document.getElementById('act-room').value;
+  } else if (actionType === 'defer') {
+    action.defer_case_id = document.getElementById('act-case').value;
+  }
+
+  document.getElementById('step-btn').disabled = true;
+  try {
+    const r = await fetch(`${BASE}/step`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(action)
+    });
+    const data = await r.json();
+
+    if (!r.ok) {
+      log('Step error: ' + JSON.stringify(data.detail), 'error');
+      document.getElementById('step-btn').disabled = false;
+      return;
+    }
+
+    currentObs  = data.observation;
+    episodeDone = data.done;
+    renderObs(currentObs);
+    populateSelects(currentObs);
+
+    const reward = data.reward.total;
+    const rewardColor = reward > 0 ? 'success' : reward < 0 ? 'error' : 'warn';
+    log(`Step ${currentObs.step}: ${actionType} → reward ${reward >= 0 ? '+' : ''}${reward.toFixed(2)}`, rewardColor);
+
+    if (data.info && data.info.error) log('Constraint: ' + data.info.error, 'warn');
+    if (data.info && data.info.scheduled) log('Scheduled: ' + data.info.scheduled, 'success');
+    if (data.info && data.info.deadline_met) log('Deadline met: ' + data.info.deadline_met, 'success');
+
+    if (episodeDone) {
+      log('Episode complete! Computing grader score...', 'info');
+      await computeScore();
+    }
+  } catch(e) {
+    log('Step failed: ' + e.message, 'error');
+  }
+  document.getElementById('step-btn').disabled = false;
+}
+
+async function computeScore() {
+  try {
+    const r    = await fetch(`${BASE}/state`);
+    const state = await r.json();
+    const scheduled = state.cases.filter(c => c.is_scheduled).length;
+    const total     = state.cases.length;
+    const pct       = scheduled / total;
+    updateScore(pct, scheduled, total);
+    log(`Final: ${scheduled}/${total} cases scheduled (${(pct*100).toFixed(0)}%)`, 'success');
+  } catch(e) {
+    log('Score fetch failed: ' + e.message, 'error');
+  }
+}
+
+function updateScore(pct, scheduled, total) {
+  const el    = document.getElementById('score-display');
+  const fill  = document.getElementById('score-fill');
+  const label = document.getElementById('score-label');
+
+  if (pct === null) {
+    el.textContent = '—';
+    fill.style.width = '0%';
+    label.textContent = 'Reset to begin';
+    return;
+  }
+
+  const score = Math.round(pct * 100) / 100;
+  el.textContent = score.toFixed(2);
+  fill.style.width = (pct * 100) + '%';
+  fill.style.background = pct >= 0.8 ? '#68d391' : pct >= 0.5 ? '#f6ad55' : '#fc8181';
+  el.style.color = pct >= 0.8 ? '#68d391' : pct >= 0.5 ? '#f6ad55' : '#fc8181';
+  label.textContent = `${scheduled}/${total} cases scheduled`;
+}
+
+function renderObs(obs) {
+  // Metrics
+  document.getElementById('m-step').textContent         = `${obs.step} / ${obs.max_steps}`;
+  document.getElementById('m-unscheduled').textContent  = obs.unscheduled_count;
+  document.getElementById('m-overdue').textContent      = obs.overdue_count;
+  const rwd = obs.cumulative_reward;
+  const rwdEl = document.getElementById('m-reward');
+  rwdEl.textContent  = (rwd >= 0 ? '+' : '') + rwd.toFixed(2);
+  rwdEl.className    = 'metric-value ' + (rwd > 0 ? 'good' : rwd < -1 ? 'bad' : 'warn');
+
+  // Cases
+  const caseList = document.getElementById('case-list');
+  document.getElementById('case-count').textContent = `${obs.cases.length} cases`;
+  if (!obs.cases.length) { caseList.innerHTML = '<div class="empty">No cases</div>'; return; }
+
+  const sorted = [...obs.cases].sort((a,b) => {
+    if (a.is_scheduled !== b.is_scheduled) return a.is_scheduled ? 1 : -1;
+    return a.priority - b.priority;
+  });
+
+  caseList.innerHTML = sorted.map(c => {
+    const isOverdue = c.mandatory_deadline !== null && !c.is_scheduled && obs.step > c.mandatory_deadline;
+    const cls = c.is_scheduled ? 'scheduled' : isOverdue ? 'overdue' : '';
+    const deadlineBadge = c.mandatory_deadline !== null
+      ? `<span class="deadline-badge">⚠ deadline@${c.mandatory_deadline}</span>` : '';
+    const assignedInfo = c.is_scheduled
+      ? `<div class="case-assigned">✓ Slot ${c.assigned_slot} · ${c.assigned_judge} · ${c.assigned_room}</div>` : '';
+    return `
+      <div class="case-card ${cls}">
+        <div class="case-top">
+          <span class="case-id">${c.case_id}</span>
+          <span class="case-type">${c.case_type}</span>
+          <span class="prio prio-${c.priority}">P${c.priority}</span>
+          ${deadlineBadge}
+        </div>
+        <div class="case-detail">${c.days_pending}d pending · ${c.estimated_duration_hours}h · req: ${c.required_judge_specialisation}</div>
+        ${assignedInfo}
+      </div>`;
+  }).join('');
+
+  // Hearings
+  const hearingList = document.getElementById('hearing-list');
+  document.getElementById('hearing-count').textContent = `${obs.scheduled_hearings.length} hearings`;
+  if (!obs.scheduled_hearings.length) {
+    hearingList.innerHTML = '<div class="empty">No hearings scheduled yet</div>';
+  } else {
+    const sorted = [...obs.scheduled_hearings].sort((a,b) => a.slot - b.slot);
+    hearingList.innerHTML = sorted.map(h => `
+      <div class="hearing-card">
+        <div class="hearing-top">
+          <span class="hearing-case">${h.case_id}</span>
+          <span class="hearing-slot">Slot ${h.slot}</span>
+        </div>
+        <div class="hearing-detail">${h.judge_id} · ${h.room_id}</div>
+      </div>`).join('');
+  }
+}
+
+function populateSelects(obs) {
+  const caseSelect  = document.getElementById('act-case');
+  const judgeSelect = document.getElementById('act-judge');
+  const roomSelect  = document.getElementById('act-room');
+
+  const unscheduled = obs.cases.filter(c => !c.is_scheduled);
+  caseSelect.innerHTML = unscheduled.map(c =>
+    `<option value="${c.case_id}">${c.case_id} (P${c.priority})</option>`
+  ).join('');
+
+  judgeSelect.innerHTML = obs.judges.map(j =>
+    `<option value="${j.judge_id}">${j.judge_id} [${j.specialisations.join(',')}]</option>`
+  ).join('');
+
+  roomSelect.innerHTML = obs.courtrooms.map(r =>
+    `<option value="${r.room_id}">${r.room_id}</option>`
+  ).join('');
+}
+
+function onActionTypeChange() {
+  const type = document.getElementById('act-type').value;
+  document.getElementById('schedule-fields').style.display =
+    (type === 'schedule' || type === 'reschedule' || type === 'defer') ? 'block' : 'none';
+}
+
+checkHealth();
+</script>
+</body>
+</html>

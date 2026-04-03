@@ -1,0 +1,190 @@
+name: courtroom-case-scheduling-negotiator
+version: "1.0.0"
+description: >
+  A real-world AI environment where an agent acts as a court scheduling clerk,
+  assigning legal cases to (time-slot, judge, courtroom) triples while satisfying
+  hard constraints (party availability, judge specialisation, room availability)
+  and optimising for backlog clearance, case priority, and statutory deadlines.
+
+tags:
+  - openenv
+  - scheduling
+  - constraint-satisfaction
+  - legal
+  - real-world
+  - multi-resource
+
+author: "Courtroom Scheduler Team"
+license: MIT
+
+# -------------------------------------------------------------------
+# Environment interface
+# -------------------------------------------------------------------
+interface:
+  reset: "env.reset() -> CourtObservation"
+  step:  "env.step(CourtAction) -> (CourtObservation, CourtReward, bool, dict)"
+  state: "env.state() -> dict"
+
+# -------------------------------------------------------------------
+# Action space
+# -------------------------------------------------------------------
+action_space:
+  type: structured
+  model: CourtAction
+  fields:
+    action_type:
+      type: string
+      enum: [schedule, reschedule, prioritise, defer, noop]
+      required: true
+    case_id:
+      type: string
+      description: Target case identifier (e.g. CASE-001)
+      required_for: [schedule, reschedule, defer]
+    slot:
+      type: integer
+      description: Time-slot index [0, total_slots)
+      required_for: [schedule, reschedule]
+    judge_id:
+      type: string
+      description: Judge identifier (e.g. JUDGE-A)
+      required_for: [schedule, reschedule]
+    room_id:
+      type: string
+      description: Courtroom identifier (e.g. ROOM-1)
+      required_for: [schedule, reschedule]
+    priority_order:
+      type: array
+      items: string
+      description: Ordered list of case_ids for prioritise action
+      required_for: [prioritise]
+    defer_case_id:
+      type: string
+      required_for: [defer]
+    rationale:
+      type: string
+      description: Agent explanation (logged only, not used in reward)
+
+# -------------------------------------------------------------------
+# Observation space
+# -------------------------------------------------------------------
+observation_space:
+  type: structured
+  model: CourtObservation
+  fields:
+    step:
+      type: integer
+      description: Current step index (0-based)
+    max_steps:
+      type: integer
+      description: Episode horizon
+    episode_done:
+      type: boolean
+    cases:
+      type: array
+      items: Case
+      description: Full docket — all cases with scheduling state
+    unscheduled_count:
+      type: integer
+    overdue_count:
+      type: integer
+      description: Cases past their mandatory deadline
+    judges:
+      type: array
+      items: Judge
+    courtrooms:
+      type: array
+      items: Courtroom
+    scheduled_hearings:
+      type: array
+      items: ScheduledHearing
+    conflict_hints:
+      type: object
+      description: "Map of slot_key -> [conflict reason strings] for partial observability"
+    cumulative_reward:
+      type: float
+
+# -------------------------------------------------------------------
+# Reward
+# -------------------------------------------------------------------
+reward:
+  model: CourtReward
+  range: [-inf, +inf]
+  episode_range: [-50, +35]   # approximate for hard task
+  components:
+    scheduling_bonus:
+      description: "+1.0 per valid new scheduling action"
+    conflict_penalty:
+      description: "-0.5 per hard constraint violation attempted"
+    deadline_penalty:
+      description: "-2.0 per case that hits its mandatory deadline unscheduled"
+    backlog_penalty:
+      description: "-0.1 per step while any case remains unscheduled"
+    efficiency_bonus:
+      description: "+0.2 for scheduling priority-1/2 cases; +0.5 for meeting a deadline"
+    noop_penalty:
+      description: "-0.05 per unnecessary noop when schedulable cases exist"
+
+# -------------------------------------------------------------------
+# Tasks
+# -------------------------------------------------------------------
+tasks:
+  - task_id: easy
+    name: "Clear 5-Case Docket"
+    difficulty: easy
+    score_range: [0.0, 1.0]
+    description: >
+      Schedule all 5 cases to valid (slot, judge, room) triples with no
+      constraint violations. No mandatory deadlines. Wide availability windows.
+    success_criteria:
+      - All 5 cases scheduled
+      - Zero hard constraint violations
+    grader: tasks.graders.EasyGrader
+
+  - task_id: medium
+    name: "Backlog Prioritisation"
+    difficulty: medium
+    score_range: [0.0, 1.0]
+    description: >
+      Clear a 15-case docket with party availability conflicts and 10% mandatory
+      deadlines. Schedule at least 12 cases, prioritising older/higher-priority
+      cases first.
+    success_criteria:
+      - At least 12/15 cases scheduled
+      - High-priority cases scheduled before low-priority ones
+      - No missed mandatory deadlines
+    grader: tasks.graders.MediumGrader
+
+  - task_id: hard
+    name: "Surge Docket + Statutory Deadlines"
+    difficulty: hard
+    score_range: [0.0, 1.0]
+    description: >
+      Manage a 30-case surge with 30% mandatory statutory deadlines, scarce
+      judicial resources (5 judges, 45% busy rate), and high party conflict rates.
+      All deadline cases must be scheduled on time.
+    success_criteria:
+      - At least 90% of cases scheduled
+      - Zero missed statutory deadlines
+      - Backlog prioritised by case age
+    grader: tasks.graders.HardGrader
+
+# -------------------------------------------------------------------
+# Baseline scores (random agent, seed=0)
+# -------------------------------------------------------------------
+baseline_scores:
+  agent: RandomAgent
+  easy:   0.72
+  medium: 0.41
+  hard:   0.18
+
+# -------------------------------------------------------------------
+# Infrastructure
+# -------------------------------------------------------------------
+runtime:
+  python: ">=3.10"
+  memory_gb: 8
+  vcpu: 2
+  max_inference_minutes: 20
+
+entrypoint: inference.py
+dockerfile: Dockerfile
