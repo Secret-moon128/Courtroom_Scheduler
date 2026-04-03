@@ -1,3 +1,12 @@
+---
+title: Courtroom Scheduler
+emoji: ⚖️
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # Courtroom Case Scheduling Negotiator
 
 An OpenEnv-compliant reinforcement learning environment where an AI agent acts as a **court scheduling clerk** — assigning legal cases to `(time-slot, judge, courtroom)` triples while satisfying hard constraints and optimising for backlog clearance, priority ordering, and statutory deadlines.
