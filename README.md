@@ -1,96 +1,114 @@
 ---
-title: Courtroom Scheduler
+title: Courtroom Case Scheduling Negotiator
 emoji: ⚖️
 colorFrom: blue
-colorTo: green
+colorTo: indigo
 sdk: docker
-pinned: false
+pinned: true
+tags:
+  - openenv
+  - scheduling
+  - legal
+  - reinforcement-learning
+  - constraint-satisfaction
 ---
 
-# Courtroom Case Scheduling Negotiator
+# ⚖️ Courtroom Case Scheduling Negotiator
 
-An OpenEnv-compliant reinforcement learning environment where an AI agent acts as a **court scheduling clerk** — assigning legal cases to `(time-slot, judge, courtroom)` triples while satisfying hard constraints and optimising for backlog clearance, priority ordering, and statutory deadlines.
+An **OpenEnv-compliant** reinforcement learning environment where an AI agent acts as a court scheduling clerk — assigning legal cases to `(time-slot, judge, courtroom)` triples while satisfying hard constraints and optimising for backlog clearance, priority ordering, and statutory deadlines.
 
 > **Tags:** `openenv` · `scheduling` · `constraint-satisfaction` · `legal` · `real-world`
 
 ---
 
-## Motivation
+## What is this?
 
-Court backlogs are a chronic real-world problem: in many jurisdictions cases wait months or years for a hearing due to scheduling inefficiencies. A skilled clerk must balance:
+Court backlogs are a chronic real-world problem — in many jurisdictions cases wait months or years due to scheduling inefficiencies. A skilled clerk must balance:
 
 - **Hard constraints** — judge specialisation, party availability, room availability, no double-booking
 - **Soft objectives** — clear high-priority / older cases first, meet statutory deadlines, minimise idle resources
 
-This environment captures exactly that challenge in a clean RL API.
+This environment captures exactly that challenge in a clean RL API with a live interactive dashboard.
+
+---
+
+## Live Dashboard
+
+Visit the **App** tab to open the interactive dashboard where you can:
+
+- Switch between Easy / Medium / Hard tasks
+- Manually schedule cases by selecting a case, judge, room, and time slot
+- Watch the reward breakdown update in real time
+- See which cases are scheduled (green), pending, or overdue (red)
+- Reset the episode at any time
 
 ---
 
 ## Quick Start
 
 ```bash
-git clone <repo-url>
-cd courtroom
-
+git clone https://huggingface.co/spaces/Secret128moom/courtroom-scheduler
+cd courtroom-scheduler
 pip install -r requirements.txt
 
 # Run tests
 pytest tests/ -v
 
-# Run with the random baseline agent (no API key needed)
-python - <<'EOF'
-import sys; sys.path.insert(0, ".")
-from env.environment import CourtSchedulerEnv
-from agents.random_agent import RandomAgent
-from tasks.graders import EasyGrader
-
-env   = CourtSchedulerEnv(n_cases=5, n_judges=3, n_rooms=2, max_steps=30, seed=42)
-agent = RandomAgent(seed=0)
-_, info = agent.run_episode(env)
-print("Score:", EasyGrader.score(info["state"]))
-EOF
+# Start server locally
+uvicorn server:app --host 0.0.0.0 --port 7860 --reload
 ```
 
 ---
 
-## Environment Description
+## OpenEnv API
 
-### Episode flow
+```python
+from env.environment import CourtSchedulerEnv
+from env.models import CourtAction
 
-```
+env = CourtSchedulerEnv(n_cases=5, n_judges=3, n_rooms=2, max_steps=30, seed=42)
 obs = env.reset()
+
 while not done:
-    action          = agent.act(obs)
+    action = CourtAction(
+        action_type="schedule",
+        case_id="CASE-001",
+        slot=3,
+        judge_id="JUDGE-A",
+        room_id="ROOM-1"
+    )
     obs, reward, done, info = env.step(action)
-final_score = grader.score(env.state())
+
+final_score = grader.score(env.state())  # 0.0 → 1.0
 ```
 
-### Time slots
+### `reset()` → `CourtObservation`
+Resets the episode. Returns the initial observation with the full case docket, judges, and courtrooms.
 
-The environment models a **discretised scheduling horizon** of `total_slots` slots (e.g. 20 for easy, 40 for hard). Each slot represents one hearing block. Multiple cases can be scheduled in parallel if different judges and rooms are used.
+### `step(action)` → `(CourtObservation, CourtReward, bool, dict)`
+Executes one action. Returns updated observation, reward breakdown, done flag, and diagnostic info.
+
+### `state()` → `dict`
+Returns the full internal state snapshot — useful for graders and logging.
 
 ---
 
 ## Action Space
 
-Actions are `CourtAction` Pydantic objects.
-
-| Field | Type | Required for | Description |
-|---|---|---|---|
-| `action_type` | `str` | always | `schedule` \| `reschedule` \| `prioritise` \| `defer` \| `noop` |
-| `case_id` | `str` | schedule, reschedule | e.g. `"CASE-001"` |
-| `slot` | `int` | schedule, reschedule | Time-slot index `[0, total_slots)` |
-| `judge_id` | `str` | schedule, reschedule | e.g. `"JUDGE-A"` |
-| `room_id` | `str` | schedule, reschedule | e.g. `"ROOM-1"` |
-| `priority_order` | `list[str]` | prioritise | Ordered list of `case_id`s |
-| `defer_case_id` | `str` | defer | Case to defer |
-| `rationale` | `str` | optional | Agent explanation (logged, not scored) |
+| Field | Type | Description |
+|---|---|---|
+| `action_type` | `str` | `schedule` \| `reschedule` \| `prioritise` \| `defer` \| `noop` |
+| `case_id` | `str` | e.g. `"CASE-001"` |
+| `slot` | `int` | Time-slot index `[0, total_slots)` |
+| `judge_id` | `str` | e.g. `"JUDGE-A"` |
+| `room_id` | `str` | e.g. `"ROOM-1"` |
+| `priority_order` | `list[str]` | For `prioritise` action |
+| `defer_case_id` | `str` | For `defer` action |
+| `rationale` | `str` | Optional explanation (logged, not scored) |
 
 ---
 
 ## Observation Space
-
-Observations are `CourtObservation` Pydantic objects.
 
 | Field | Type | Description |
 |---|---|---|
@@ -100,104 +118,88 @@ Observations are `CourtObservation` Pydantic objects.
 | `unscheduled_count` | `int` | Cases not yet assigned |
 | `overdue_count` | `int` | Cases past mandatory deadline |
 | `judges` | `list[Judge]` | Judges with specialisations and availability |
-| `courtrooms` | `list[Courtroom]` | Rooms with availability |
+| `courtrooms` | `list[Courtroom]` | Rooms with availability slots |
 | `scheduled_hearings` | `list[ScheduledHearing]` | Committed schedule so far |
-| `conflict_hints` | `dict[str, list[str]]` | Slot-level conflict hints |
+| `conflict_hints` | `dict` | Slot-level conflict hints |
 | `cumulative_reward` | `float` | Running reward total |
-
-### Case fields
-
-| Field | Description |
-|---|---|
-| `case_id` | Unique identifier e.g. `CASE-001` |
-| `case_type` | `criminal` \| `civil` \| `family` \| `appeals` |
-| `priority` | `1` (urgent) → `5` (routine) |
-| `days_pending` | Days since filing |
-| `mandatory_deadline` | Episode step by which case MUST be scheduled (`None` = flexible) |
-| `required_judge_specialisation` | Judge must have this specialisation |
-| `plaintiff_available_slots` | Slot indices where plaintiff is free |
-| `defendant_available_slots` | Slot indices where defendant is free |
-| `is_scheduled` | Whether case has been assigned |
 
 ---
 
 ## Reward Function
 
-Rewards are emitted **every step** (not just at episode end) providing dense progress signals.
+Dense rewards emitted every step — not just at episode end.
 
 | Component | Value | Trigger |
 |---|---|---|
 | `scheduling_bonus` | `+1.0` | Valid new scheduling action |
 | `efficiency_bonus` | `+0.2` | Scheduling a priority 1–2 case |
-| `efficiency_bonus` | `+0.5` | Scheduling a case before its deadline |
+| `efficiency_bonus` | `+0.5` | Scheduling before mandatory deadline |
 | `conflict_penalty` | `−0.5` | Hard constraint violation attempted |
 | `deadline_penalty` | `−2.0` | Case reaches deadline unscheduled |
 | `backlog_penalty` | `−0.1` | Per step while unscheduled cases remain |
 | `noop_penalty` | `−0.05` | Noop when schedulable cases exist |
-| `reschedule_cost` | `−0.1` | Administrative cost of rescheduling |
 
 ---
 
 ## Tasks
 
 ### Task 1 — Easy: Clear 5-Case Docket
-
-| Config | Value |
+| | |
 |---|---|
 | Cases | 5 |
 | Judges | 3 |
 | Courtrooms | 2 |
 | Time slots | 20 |
 | Max steps | 30 |
-| Mandatory deadlines | None |
-| Seed | 42 |
+| Deadlines | None |
 
-**Goal:** Schedule all 5 cases with zero hard constraint violations.  
-**Score:** 70% from scheduling completeness + 30% from reward quality (violation-free).
+**Goal:** Schedule all 5 cases with zero constraint violations.  
+**Grader:** 70% scheduling completeness + 30% reward quality.
+
+---
 
 ### Task 2 — Medium: Backlog Prioritisation
-
-| Config | Value |
+| | |
 |---|---|
 | Cases | 15 |
-| Judges | 4 (busier) |
+| Judges | 4 |
 | Courtrooms | 3 |
 | Time slots | 30 |
 | Max steps | 60 |
-| Mandatory deadlines | ~10% of cases |
-| Seed | 1337 |
+| Deadlines | ~10% of cases |
 
-**Goal:** Schedule ≥ 12 cases, high-priority cases first, no missed deadlines.  
-**Score:** 50% scheduling completeness + 30% priority ordering + 20% deadline compliance.
+**Goal:** Schedule ≥ 12 cases, high-priority first, no missed deadlines.  
+**Grader:** 50% completeness + 30% priority ordering + 20% deadline compliance.
+
+---
 
 ### Task 3 — Hard: Surge Docket + Statutory Deadlines
-
-| Config | Value |
+| | |
 |---|---|
 | Cases | 30 |
-| Judges | 5 (45% busy rate) |
-| Courtrooms | 3 (25% busy rate) |
+| Judges | 5 (45% busy) |
+| Courtrooms | 3 (25% busy) |
 | Time slots | 40 |
 | Max steps | 80 |
-| Mandatory deadlines | ~30% of cases |
-| Seed | 9999 |
+| Deadlines | ~30% of cases (statutory) |
 
 **Goal:** Schedule ≥ 90% of cases, meet ALL statutory deadlines, prioritise by case age.  
-**Score:** 40% completeness + 35% deadline compliance + 15% priority ordering + 10% case age.
+**Grader:** 40% completeness + 35% deadline compliance + 15% priority + 10% case age.
 
 ---
 
 ## Baseline Scores
 
-Measured with `RandomAgent(seed=0)` — a heuristic random agent that finds valid constraint-satisfying assignments.
+Measured with `RandomAgent(seed=0)` — a heuristic agent that finds valid constraint-satisfying assignments without any LLM.
 
-| Task | Random Agent | Expected LLM Agent |
+| Task | Random Agent | LLM Agent (llama-3.1-8b) |
 |---|---|---|
-| Easy | **0.72** | ~0.92+ |
-| Medium | **0.41** | ~0.70+ |
-| Hard | **0.18** | ~0.55+ |
+| Easy | 1.00 | ~0.90 |
+| Medium | 0.91 | ~0.96 |
+| Hard | 0.93 | ~0.94 |
+| **Average** | **0.95** | **~0.93** |
 
-To reproduce:
+To reproduce random agent baseline:
 
 ```bash
 python - <<'EOF'
@@ -209,7 +211,6 @@ from tasks.task_medium import make_medium_task
 from tasks.task_hard import make_hard_task
 
 makers = {"easy": make_easy_task, "medium": make_medium_task, "hard": make_hard_task}
-
 for task in TASKS:
     env   = makers[task["task_id"]]()
     agent = RandomAgent(seed=0)
@@ -221,100 +222,79 @@ EOF
 
 ---
 
-## Setup & Deployment
-
-### Local
+## Running Inference
 
 ```bash
-pip install -r requirements.txt
-pytest tests/ -v
+export API_BASE_URL="https://api.groq.com/openai/v1"
+export MODEL_NAME="llama-3.1-8b-instant"
+export HF_TOKEN="your-api-key"
+
+python inference.py
 ```
 
-### Docker
+Output format:
+```
+[START] task=easy env=courtroom-scheduler model=llama-3.1-8b-instant
+[STEP] step=1 action=schedule(CASE-002@slot5) reward=1.20 done=false error=null
+[STEP] step=2 action=schedule(CASE-001@slot0) reward=1.20 done=false error=null
+[END] success=true steps=5 score=0.920 rewards=1.20,1.20,1.20,1.20,1.20
+```
+
+---
+
+## HTTP API
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/` | GET | Interactive dashboard UI |
+| `/health` | GET | Liveness check — returns `{"status": "ok"}` |
+| `/reset` | POST | Reset environment |
+| `/reset/{task_id}` | POST | Reset to specific task (easy/medium/hard) |
+| `/step` | POST | Execute one action |
+| `/state` | GET | Full internal state |
+| `/tasks` | GET | List all tasks |
+| `/docs` | GET | Swagger UI |
+
+---
+
+## Docker
 
 ```bash
 docker build -t courtroom-scheduler .
 docker run -p 7860:7860 \
-  -e API_BASE_URL="https://api.openai.com/v1" \
-  -e MODEL_NAME="gpt-4o-mini" \
-  -e HF_TOKEN="sk-..." \
+  -e API_BASE_URL="https://api.groq.com/openai/v1" \
+  -e MODEL_NAME="llama-3.1-8b-instant" \
+  -e HF_TOKEN="your-key" \
   courtroom-scheduler
 ```
 
-### Hugging Face Space
-
-```bash
-huggingface-cli login
-huggingface-cli repo create courtroom-scheduler --type space --space_sdk docker
-git remote add hf https://huggingface.co/spaces/Secret128moon/courtroom-scheduler
-git push hf main
-```
-
-Set the following Space secrets:
-- `API_BASE_URL`
-- `MODEL_NAME`
-- `HF_TOKEN`
-
-### Run inference
-
-```bash
-export API_BASE_URL="https://api.openai.com/v1"
-export MODEL_NAME="gpt-4o-mini"
-export HF_TOKEN="sk-..."
-python inference.py
-```
-
-The script emits structured logs:
-```
-[START] {"task_id": "easy", "model": "gpt-4o-mini", ...}
-[STEP]  {"step": 1, "action_type": "schedule", "reward": 1.2, "done": false, ...}
-[END]   {"task_id": "easy", "final_score": 0.91, "steps": 12, ...}
-```
-
 ---
 
-## HTTP API (when deployed)
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/health` | GET | Liveness check — returns 200 |
-| `/reset` | POST | Reset environment, returns first observation |
-| `/reset/{task_id}` | POST | Reset to specific task (easy/medium/hard) |
-| `/step` | POST | Execute action, returns obs + reward + done + info |
-| `/state` | GET | Full internal state snapshot |
-| `/tasks` | GET | List available tasks |
-| `/docs` | GET | Interactive Swagger UI |
-
----
-
-## File Structure
+## Project Structure
 
 ```
 courtroom/
-├── openenv.yaml          # OpenEnv spec metadata
 ├── inference.py          # Baseline inference script (mandatory name)
-├── server.py             # FastAPI HTTP server
-├── Dockerfile            # HF Space compatible container
+├── server.py             # FastAPI server + frontend dashboard
+├── openenv.yaml          # OpenEnv spec metadata
+├── Dockerfile
 ├── requirements.txt
 ├── README.md
 ├── env/
-│   ├── __init__.py
-│   ├── environment.py    # CourtSchedulerEnv: step/reset/state
-│   ├── models.py         # Pydantic: CourtObservation, CourtAction, CourtReward
+│   ├── environment.py    # step() / reset() / state()
+│   ├── models.py         # Pydantic typed models
 │   └── simulator.py      # Procedural case/judge/room generator
 ├── tasks/
-│   ├── __init__.py
-│   ├── task_easy.py      # Task 1 config + factory
-│   ├── task_medium.py    # Task 2 config + factory
-│   ├── task_hard.py      # Task 3 config + factory
+│   ├── task_easy.py
+│   ├── task_medium.py
+│   ├── task_hard.py
 │   └── graders.py        # Deterministic 0.0–1.0 graders
 ├── agents/
-│   ├── __init__.py
-│   ├── random_agent.py   # Heuristic baseline agent
+│   ├── random_agent.py   # Heuristic baseline
 │   └── llm_agent.py      # OpenAI-client LLM agent
 └── tests/
-    ├── test_env.py        # OpenEnv spec compliance tests
-    └── test_graders.py    # Grader determinism and range tests
+    ├── test_env.py        # OpenEnv spec compliance
+    └── test_graders.py    # Grader tests
 ```
 
 ---
