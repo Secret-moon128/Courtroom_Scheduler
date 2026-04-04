@@ -261,7 +261,13 @@ def run_task(task_meta: dict, client: OpenAI) -> float:
             if done:
                 break
 
-            action, action_str = get_action(client, obs, failed_attempts)
+            # If LLM has failed 3 times in a row, bypass it entirely
+            if len(failed_attempts) >= 3:
+                action, action_str = _fallback_action(obs)
+                failed_attempts.clear()
+            else:
+                action, action_str = get_action(client, obs, failed_attempts)
+
             last_error: Optional[str] = None
 
             try:
@@ -277,13 +283,6 @@ def run_task(task_meta: dict, client: OpenAI) -> float:
                     failed_attempts.append(
                         f"{action.case_id}@slot{action.slot} via {action.judge_id}+{action.room_id}: {err}"
                     )
-                    # Hard fallback: if LLM keeps failing, use deterministic solver
-                    if len(failed_attempts) >= 3:
-                        action, action_str = _fallback_action(obs)
-                        obs, reward_obj, done, info = env.step(action)
-                        step_reward += reward_obj.total
-                        last_error = None
-                        failed_attempts.clear()
 
             except Exception as e:
                 step_reward = 0.0
