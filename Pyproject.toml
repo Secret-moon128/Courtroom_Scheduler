@@ -26,15 +26,15 @@ dev = [
 ]
 
 [project.scripts]
-serve = "server:app"
+courtroom-server = "server.app:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["env*", "tasks*", "agents*"]
+include = ["env*", "tasks*", "agents*", "server*"]
 
 [tool.openenv]
 name = "courtroom-scheduler"
 version = "1.0.0"
-entrypoint = "server:app"
+entrypoint = "server.app:main"
 inference = "inference.py"
 spec = "openenv.yaml"
