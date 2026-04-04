@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ---
 title: Courtroom Case Scheduling Negotiator
 emoji: ⚖️
@@ -302,3 +303,6 @@ courtroom/
 ## License
 
 MIT
+=======
+# Courtroom_Scheduler
+>>>>>>> 0351e33cbb5cf809c99ad479445a967365c7a96e
