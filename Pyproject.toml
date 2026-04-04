@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "courtroom-scheduler"
+version = "1.0.0"
+description = "OpenEnv-compliant Courtroom Case Scheduling Negotiator environment"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["openenv", "scheduling", "reinforcement-learning", "legal"]
+dependencies = [
+    "pydantic>=2.0.0",
+    "openai>=1.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "httpx>=0.27.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["env*", "tasks*", "agents*"]
+
+[tool.openenv]
+name = "courtroom-scheduler"
+version = "1.0.0"
+entrypoint = "server:app"
+inference = "inference.py"
+spec = "openenv.yaml"
